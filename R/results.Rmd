@@ -1,0 +1,186 @@
+---
+title: "MeroVent"
+author: "ES"
+date: "9/19/2021"
+output: 
+  html_document:
+    keep_md: true
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(tidyverse)
+require(magrittr)
+require(Hmisc)
+require(ggplot2)
+```
+
+# Load and prepare data
+
+```{r, cache=TRUE}
+dd <- read.table('./../sdtab020_clean', header = TRUE) %>%
+  mutate(across(everything(), as.numeric)
+                   , dose = ceil(ID/192)) %>% 
+  group_by(ID, CKDEPI, LOGPRO, dose) %>% 
+  #filter(TIME==96) %>% 
+  summarise(p = sum(C_VENT>=2)/n())
+```
+
+Six discrete doses represent 1.5, ..., 8g of daily Meropenem. LOGPRO measures protein concentrations in unclear units. TIME might not be relevant.
+
+# Replication of figures from manuscript
+```{r, cache=TRUE}
+dd %>% 
+  ggplot(aes(x = CKDEPI, y = LOGPRO, fill = p)) +
+  geom_tile() +
+  facet_wrap(~dose) +
+  scale_fill_gradient2(low = 'red', mid = 'yellow', high = 'darkgreen', midpoint = .5)
+
+dd %>% 
+  filter(CKDEPI %in% c(40,50,60) & LOGPRO %in% c(2.2, 2.4)) %>% 
+  ggplot(aes(x = dose, y = p)) +
+  geom_point() + geom_line() +
+  facet_grid(CKDEPI ~ LOGPRO) +
+  scale_fill_gradient2(low = 'red', mid = 'yellow', high = 'darkgreen', midpoint = .5)
+```
+
+## Inversion
+
+```{r}
+dd %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>% 
+  filter(p>=0.9) %>% slice(which.min(dose)) %>% 
+  ggplot(aes(x = CKDEPI, y = LOGPRO, fill = as.factor(dose))) +
+  geom_tile()
+```
+
+
+# Interpolation
+
+## Only dose
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, results=FALSE}
+d.plot1 <- dd %>% 
+  ungroup() %>% group_by(CKDEPI, LOGPRO) %>% nest() %>% 
+  mutate(tps = map(data, ~fields::Tps(.$dose, .$p, lambda = 0))
+         , tps.r = map(tps, ~.$fitted.values)
+         , dose.c = map(tps, ~seq(1,6,.1))
+         , p = map(tps, ~predict(., seq(1,6,.1))[,1])) %>%   unnest(c(dose.c, p))
+```
+
+```{r}
+d.plot1 %>% 
+  filter(CKDEPI %in% c(40,50,60) & LOGPRO %in% c(2.2, 2.4)) %>% 
+  ggplot(aes(x = dose.c, y = p)) +
+  geom_point(data = dd %>% filter(CKDEPI %in% c(40,50,60) & LOGPRO %in% c(2.2, 2.4)), aes(x=dose)) +
+  geom_line(aes(x=dose.c, y=p), color = 'orange') +
+  ggalt::geom_xspline(spline_shape = -0.5, color = 'darkgreen') +
+  facet_grid(CKDEPI ~ LOGPRO, scales = 'free')
+
+```
+
+No visual difference between ggalt::geom_xspline and fields::Tps.
+
+```{r}
+d.plot1 %>% 
+  filter(dose.c %in% c(3,3.5,4)) %>% 
+  ggplot(aes(x = CKDEPI, y = LOGPRO, fill = p)) +
+  geom_tile() +
+  facet_grid(~dose.c) +
+  scale_fill_gradient2(low = 'red', mid = 'yellow', high = 'darkgreen', midpoint = .5)
+
+```
+
+### Inversion
+
+```{r}
+d.plot1 %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>% 
+  filter(p>=0.9) %>% slice(which.min(dose.c)) %>% 
+  ggplot(aes(x = CKDEPI, y = LOGPRO, fill = dose.c)) +
+  geom_tile() +
+  scale_fill_gradient(low = 'pink', high = 'blue')
+```
+
+### Upsampling
+
+```{r, cache=TRUE}
+d.plot1 %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>% 
+  filter(p>=0.9) %>% slice(which.min(dose.c)) %>% 
+  ungroup() %>% nest() %>% 
+  mutate(tps = map(data, ~fields::Tps(.[c('CKDEPI','LOGPRO')], .$dose.c))
+         , tps.xy = map(tps, ~expand_grid(CKDEPI.c = seq(0,160,1), LOGPRO.c = seq(2,4.5,.01)))
+         , dose.c = map(tps, ~predict(., expand_grid(seq(0,160,1), seq(2,4.5,.01)), lambda = 0.1)[,1])) %>% 
+  unnest(c(tps.xy, dose.c)) %>% 
+  ggplot(aes(x = CKDEPI.c, y = LOGPRO.c, fill = dose.c)) +
+  geom_tile() +
+  scale_fill_gradient(low = 'pink', high = 'blue')
+```
+
+## Only CKD x LOGPRO
+
+```{r}
+d.plot2 <- dd %>%ungroup() %>% group_by(dose) %>% nest() %>% 
+  mutate(tps = map(data, ~fields::Tps(.[c('CKDEPI','LOGPRO')], .$p))
+         , tps.xy = map(tps, ~expand_grid(CKDEPI.c = seq(0,160,1), LOGPRO.c = seq(2,4.5,.01)))
+         , p = map(tps, ~predict(., expand_grid(seq(0,160,1), seq(2,4.5,.01)), lambda = 0.1)[,1])) %>% 
+  unnest(c(tps.xy, p))
+
+d.plot2 %>% 
+  ggplot(aes(x = CKDEPI.c, y = LOGPRO.c, fill = p)) +
+  geom_tile() +
+  facet_wrap(~dose) +
+  scale_fill_gradient2(low = 'red', mid = 'yellow', high = 'darkgreen', midpoint = .5)
+
+d.plot2 %>% 
+  filter(CKDEPI.c %in% c(40, 45, 50) & LOGPRO.c %in% c(2.2, 2.3, 2.4)) %>% 
+  ggplot(aes(x = dose, y = p)) +
+  geom_point() + geom_line() + 
+  facet_grid(CKDEPI.c ~ LOGPRO.c) +
+  scale_fill_gradient2(low = 'red', mid = 'yellow', high = 'darkgreen', midpoint = .5)
+```
+
+### Inversion
+
+```{r}
+d.plot2 %>% ungroup() %>%  group_by(CKDEPI.c, LOGPRO.c) %>% 
+  filter(p>=0.9) %>% slice(which.min(dose)) %>% 
+  ggplot(aes(x = CKDEPI.c, y = LOGPRO.c, fill = as.factor(dose))) +
+  geom_tile() 
+```
+
+## Both
+
+```{r}
+d.plot3 <- dd %>% ungroup() %>% nest() %>% 
+  mutate(tps = map(data, ~fields::Tps(.[c('CKDEPI','LOGPRO','dose')], .$p))
+         , tps.xyz = map(tps, ~expand_grid(CKDEPI.c = seq(0,160,1)
+                                           , LOGPRO.c = seq(2,4.5,.01)
+                                           , dose.c = seq(1,6,.1)))
+         , p = map(tps, ~predict(., expand_grid(seq(0,160,1), seq(2,4.5,.01), seq(1,6,.1)), lambda = 0.1)[,1])) %>% 
+  unnest(c(tps.xyz, p))
+
+d.plot3 %>% 
+  filter(dose.c %in% c(3,3.5,4)) %>% 
+  ggplot(aes(x = CKDEPI.c, y = LOGPRO.c, fill = p)) +
+  geom_tile() +
+  facet_wrap(~dose.c) +
+  scale_fill_gradient2(low = 'red', mid = 'yellow', high = 'darkgreen', midpoint = .5)
+
+d.plot3 %>% 
+  filter(CKDEPI.c %in% c(40, 45, 50) & LOGPRO.c %in% c(2.2, 2.3, 2.4)) %>% 
+  ggplot(aes(x = dose.c, y = p)) +
+  geom_line() + 
+  facet_grid(CKDEPI.c ~ LOGPRO.c) +
+  scale_fill_gradient2(low = 'red', mid = 'yellow', high = 'darkgreen', midpoint = .5)
+```
+
+### Inversion
+
+```{r}
+d.plot3 %>% ungroup() %>%  group_by(CKDEPI.c, LOGPRO.c) %>% 
+  filter(p>=0.9) %>% slice(which.min(dose.c)) %>% 
+  ggplot(aes(x = CKDEPI.c, y = LOGPRO.c, fill = dose.c)) +
+  geom_tile() +
+  scale_fill_gradient(low = 'pink', high = 'blue')
+```
+
