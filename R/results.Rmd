@@ -8,8 +8,8 @@ output:
 
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, cache = TRUE, cache.lazy = FALSE, warning = FALSE, message = FALSE)
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE, cache = FALSE, cache.lazy = FALSE, warning = FALSE, message = FALSE)
 require(tidyverse)
 require(magrittr)
 require(ggplot2)
@@ -34,7 +34,7 @@ LOGPRO.c.range <- seq(2,4.5,.05)
 ```{r}
 dd <- read.table('./../sdtab020_clean', header = TRUE) %>%
   mutate(across(everything(), as.numeric)
-                   , dose = ceil(ID/192)) %>% 
+                   , dose = ceiling(ID/192)) %>% 
   group_by(ID, CKDEPI, LOGPRO, dose) %>% 
   summarise(p = sum(C_VENT>=MIC)/n())
 ```
