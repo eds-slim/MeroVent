@@ -12,11 +12,11 @@ output:
 knitr::opts_chunk$set(echo = TRUE, cache = TRUE, cache.lazy = FALSE, warning = FALSE, message = FALSE)
 require(tidyverse)
 require(magrittr)
-require(Hmisc)
 require(ggplot2)
 
 PTA <- 0.9
 MIC <- 2
+
 CKDEPI.subset <- c(40,50)
 CKDEPI.c.subset <- c(40,45,50)
 
@@ -141,7 +141,7 @@ d.plot1.up %>%
 
 ## Only CKD x LOGPRO
 
-```{r}
+```{r interpolation2}
 d.plot2 <- dd %>%ungroup() %>% group_by(dose) %>% nest() %>% 
   mutate(tps = map(data, ~fields::Tps(.[c('CKDEPI','LOGPRO')], .$p))
          , tps.xy = map(tps, ~expand_grid(CKDEPI.c = CKDEPI.c.range, LOGPRO.c = LOGPRO.c.range))
@@ -164,7 +164,7 @@ d.plot2 %>%
 
 ### Inversion
 
-```{r}
+```{r inversion2}
 d.plot2 %>% ungroup() %>%  group_by(CKDEPI.c, LOGPRO.c) %>% 
   filter(p>=PTA) %>% slice(which.min(dose)) %>% 
   ggplot(aes(x = CKDEPI.c, y = LOGPRO.c, fill = as.factor(dose))) +
@@ -173,7 +173,9 @@ d.plot2 %>% ungroup() %>%  group_by(CKDEPI.c, LOGPRO.c) %>%
 
 ## Both
 
-```{r}
+NOT RUN
+
+```{r interpolation3, eval=FALSE}
 d.plot3 <- dd %>% ungroup() %>% nest() %>% 
   mutate(tps = map(data, ~fields::Tps(.[c('CKDEPI','LOGPRO','dose')], .$p))
          , tps.xyz = map(tps, ~expand_grid(CKDEPI.c = CKDEPI.c.range
@@ -199,7 +201,7 @@ d.plot3 %>%
 
 ### Inversion
 
-```{r}
+```{r inversion3, eval=FALSE}
 d.plot3 %>% ungroup() %>%  group_by(CKDEPI.c, LOGPRO.c) %>% 
   filter(p>=PTA) %>% slice(which.min(dose.c)) %>% 
   ggplot(aes(x = CKDEPI.c, y = LOGPRO.c, fill = dose.c)) +
