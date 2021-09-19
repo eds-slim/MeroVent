@@ -40,28 +40,7 @@ dd %>% group_by(TIME, CKDEPI, LOGPRO) %>%
 
 
 
-temp <- d.plot.2 %>% select(CKDEPI, LOGPRO, dose, p) %>%  
-  group_by(CKDEPI, LOGPRO, dose) %>% 
-  #filter(TIME==96) %>% 
-  #summarise(p = sum(C_VENT>=2)/n()) %>% 
-  ungroup() %>% group_by(dose)
 
-temp %>% 
-  ggplot(aes(x = CKDEPI, y = LOGPRO, fill = p)) +
-  geom_tile() +
-  facet_wrap(~dose) +
-  scale_fill_gradient2(low = 'red', mid = 'yellow', high = 'darkgreen', midpoint = -.5)
-
-  
-temp %>% nest() %>% 
-  mutate(tps = map(data, ~fields::Tps(.[c('CKDEPI','LOGPRO')], .$p))
-         , tps.xy = map(tps, ~expand_grid(x = seq(0,160,1), y = seq(2,4.5,.01)))
-         , tps.z = map(tps, ~predict(., expand_grid(seq(0,160,1), seq(2,4.5,.01)), lambda = 0.1)[,1])) %>% 
-  unnest(c(tps.xy, tps.z)) %>% 
-  ggplot(aes(x = x, y = y, fill = tps.z)) +
-  geom_tile() +
-  facet_wrap(~dose) +
-  scale_fill_gradient2(low = 'red', mid = 'yellow', high = 'blue', midpoint = .5)
   
 temp %>% nest() %>% 
     mutate(tps = map(data, ~fields::Tps(.[c('CKDEPI','LOGPRO')], .$p))
