@@ -9,7 +9,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, cache = TRUE, warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE, cache.lazy = FALSE, warning = FALSE, message = FALSE)
 require(tidyverse)
 require(magrittr)
 require(Hmisc)
@@ -22,10 +22,11 @@ CKDEPI.c.subset <- c(40,45,50)
 
 LOGPRO.subset <- c(2.2, 2.4)
 LOGPRO.c.subset <- c(2.2, 2.3, 2.4)
+dose.c.subset <- c(3,3.5,4)
 
 dose.c.range <- seq(1,6,.1)
-CKDEPI.c.range <- seq(0,160,1)
-LOGPRO.c.range <- seq(2,4.5,.01)
+CKDEPI.c.range <- seq(10,160,10)
+LOGPRO.c.range <- seq(2,4.5,.05)
 ```
 
 # Load and prepare data
@@ -117,17 +118,25 @@ d.plot1 %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>%
 ### Upsampling
 
 ```{r}
-d.plot1 %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>% 
+d.plot1.up <- d.plot1 %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>% 
   filter(p>=PTA) %>% 
   slice(which.min(dose.c)) %>% 
   ungroup() %>% nest() %>% 
   mutate(tps = map(data, ~fields::Tps(.[c('CKDEPI','LOGPRO')], .$dose.c))
          , tps.xy = map(tps, ~expand_grid(CKDEPI.c = CKDEPI.c.range, LOGPRO.c = LOGPRO.c.range))
-         , dose.c = map(tps, ~predict(., expand_grid(CKDEPI.c.range, LOGPRO.c.range), lambda = 0.1)[,1])) %>% 
-  unnest(c(tps.xy, dose.c)) %>% 
+         , dose.c = map(tps, ~predict(., expand_grid(CKDEPI.c.range, LOGPRO.c.range), lambda = 0.05)[,1])) %>% 
+  unnest(c(tps.xy, dose.c)) 
+```
+
+```{r}
+d.plot1.up %>% 
   ggplot(aes(x = CKDEPI.c, y = LOGPRO.c, fill = dose.c)) +
   geom_tile() +
   scale_fill_gradient(low = 'pink', high = 'blue')
+
+d.plot1.up %>% 
+  ggplot(aes(x = CKDEPI.c, y = LOGPRO.c, z = dose.c)) +
+  geom_contour()
 ```
 
 ## Only CKD x LOGPRO
@@ -174,7 +183,7 @@ d.plot3 <- dd %>% ungroup() %>% nest() %>%
   unnest(c(tps.xyz, p))
 
 d.plot3 %>% 
-  filter(dose.c %in% c(3,3.5,4)) %>% 
+  filter(dose.c %in% dose.c.subset) %>% 
   ggplot(aes(x = CKDEPI.c, y = LOGPRO.c, fill = p)) +
   geom_tile() +
   facet_wrap(~dose.c) +
@@ -196,5 +205,10 @@ d.plot3 %>% ungroup() %>%  group_by(CKDEPI.c, LOGPRO.c) %>%
   ggplot(aes(x = CKDEPI.c, y = LOGPRO.c, fill = dose.c)) +
   geom_tile() +
   scale_fill_gradient(low = 'pink', high = 'blue')
+
+d.plot3 %>% ungroup() %>%  group_by(CKDEPI.c, LOGPRO.c) %>% 
+  filter(p>=PTA) %>% slice(which.min(dose.c)) %>% 
+  ggplot(aes(x = CKDEPI.c, y = LOGPRO.c, z = dose.c)) +
+  geom_contour()
 ```
 
