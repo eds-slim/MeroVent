@@ -14,31 +14,35 @@ knitr::opts_chunk$set(echo = TRUE, cache = FALSE, cache.lazy = FALSE, warning = 
 require(tidyverse)
 require(magrittr)
 require(ggplot2)
+require(metR)
 
 PTA <- 0.9
 MIC <- 2
 
-CKDEPI.subset <- c(40,50)
-CKDEPI.c.subset <- c(40,45,50)
+CKDEPI.subset <- c(80, 90)
+CKDEPI.c.subset <- c(80, 85, 90)
 
-LOGPRO.subset <- c(2.2, 2.4)
-LOGPRO.c.subset <- c(2.2, 2.3, 2.4)
-dose.c.subset <- c(3,3.5,4)
+LOGPRO.subset <- c(2.699, 3)
+LOGPRO.c.subset <- c(2.5, 2.7, 3)
+dose.c.subset <- c(3,4,5,6)
 
-dose.c.range <- seq(1,6,.1)
-CKDEPI.c.range <- seq(10,160,10)
-LOGPRO.c.range <- seq(2,4.5,.05)
+dose.c.range <- seq(1.5, 18, .1)
+CKDEPI.c.range <- seq(10,160,1)
+LOGPRO.c.range <- seq(2, 5, .01)
 ```
 
 # Load and prepare data
 
 
 ```r
-dd <- read.table('./../sdtab020_clean', header = TRUE) %>%
+dd <- read.table('./../sdtab020_1GB_clean_15', header = TRUE) %>%
   mutate(across(everything(), as.numeric)
-                   , dose = ceiling(ID/192)) %>% 
+         , dose = c(1.5, 3, 6, 9, 12, 18)[ceiling(ID/128)]) %>% 
+  filter(TIME==96) %>% 
   group_by(ID, CKDEPI, LOGPRO, dose) %>% 
-  summarise(p = sum(C_VENT>=MIC)/n())
+  summarise(p = sum(C_VENT>=MIC)/n()) %>% 
+  ungroup() %>% group_by(CKDEPI, LOGPRO) %>% arrange(CKDEPI, LOGPRO) %>%
+  mutate(p = pmax(p, lag(p, n = 1, default = 0)))
 ```
 
 Six discrete doses represent 1.5, ..., 8g of daily Meropenem. LOGPRO measures protein concentrations in unclear units. TIME might not be relevant.
@@ -87,11 +91,14 @@ dd %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>%
 ```r
 d.plot1 <- dd %>% 
   ungroup() %>% group_by(CKDEPI, LOGPRO) %>% nest() %>% 
-  mutate(tps = map(data, ~fields::Tps(.$dose, .$p, lambda = 0))
-         , tps.r = map(tps, ~.$fitted.values)
-         , dose.c = map(tps, ~dose.c.range)
-         , p = map(tps, ~predict(., dose.c.range)[,1])) %>%
-  unnest(c(dose.c, p))
+  mutate(
+    #tps = map(data, ~fields::Tps(.$dose, .$p, lambda = 0.005))
+    #     , tps.r = map(tps, ~.$fitted.values)
+    #     , dose.c = map(tps, ~dose.c.range)
+    #     , p = map(tps, ~predict(., dose.c.range)[,1])
+         , sp = map(data, ~data.frame(spline(.$dose, .$p, method = 'hyman', xout = dose.c.range)) %>% setNames(c('dose.c','p')))
+         ) %>%
+  unnest(sp)
 ```
 
 
@@ -101,13 +108,12 @@ d.plot1 %>%
   ggplot(aes(x = dose.c, y = p)) +
   geom_point(data = dd %>% filter(CKDEPI %in% CKDEPI.subset & LOGPRO %in% LOGPRO.subset), aes(x=dose)) +
   geom_line(aes(x=dose.c, y=p), color = 'orange') +
-  ggalt::geom_xspline(spline_shape = -0.5, color = 'darkgreen') +
+  ggalt::geom_xspline(data = (dd %>% filter(CKDEPI %in% CKDEPI.subset & LOGPRO %in% LOGPRO.subset)), aes(x=dose), spline_shape = -.25, color = 'darkgreen') +
   facet_grid(CKDEPI ~ LOGPRO)
 ```
 
 ![](results_files/figure-html/unnamed-chunk-5-1.png)<!-- -->
 
-No visual difference between ggalt::geom_xspline and fields::Tps.
 
 
 ```r
@@ -149,6 +155,13 @@ d.plot1.up <- d.plot1 %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>%
   unnest(c(tps.xy, dose.c)) 
 ```
 
+```
+## Warning: 
+## Grid searches over lambda (nugget and sill variances) with  minima at the endpoints: 
+##   (GCV) Generalized Cross-Validation 
+##    minimum at  right endpoint  lambda  =  9.772471e-06 (eff. df= 116.8503 )
+```
+
 
 ```r
 d.plot1.up %>% 
@@ -162,7 +175,11 @@ d.plot1.up %>%
 ```r
 d.plot1.up %>% 
   ggplot(aes(x = CKDEPI.c, y = LOGPRO.c, z = dose.c)) +
-  geom_contour()
+  geom_contour(breaks = seq(1,18)) +
+  metR::geom_text_contour(stroke = 0.2, breaks = seq(1,18), skip = 0) +
+  geom_contour(size=.1, breaks = seq(1.1,1.9,.1), color = 'grey') +
+  metR::geom_text_contour(stroke = 0.1, size = 2, breaks = seq(1.1,1.9, .1), skip = 0, color = 'black', label.placement = label_placement_fraction(frac = c(.1,.9))) +
+  theme_bw()
 ```
 
 ![](results_files/figure-html/unnamed-chunk-9-2.png)<!-- -->
@@ -182,7 +199,27 @@ d.plot2 <- dd %>%ungroup() %>% group_by(dose) %>% nest() %>%
 ## Warning: 
 ## Grid searches over lambda (nugget and sill variances) with  minima at the endpoints: 
 ##   (GCV) Generalized Cross-Validation 
-##    minimum at  right endpoint  lambda  =  1.016225e-05 (eff. df= 182.3999 )
+##    minimum at  right endpoint  lambda  =  9.811065e-06 (eff. df= 121.6 )
+## Warning: 
+## Grid searches over lambda (nugget and sill variances) with  minima at the endpoints: 
+##   (GCV) Generalized Cross-Validation 
+##    minimum at  right endpoint  lambda  =  9.811065e-06 (eff. df= 121.6 )
+## Warning: 
+## Grid searches over lambda (nugget and sill variances) with  minima at the endpoints: 
+##   (GCV) Generalized Cross-Validation 
+##    minimum at  right endpoint  lambda  =  9.811065e-06 (eff. df= 121.6 )
+## Warning: 
+## Grid searches over lambda (nugget and sill variances) with  minima at the endpoints: 
+##   (GCV) Generalized Cross-Validation 
+##    minimum at  right endpoint  lambda  =  9.811065e-06 (eff. df= 121.6 )
+## Warning: 
+## Grid searches over lambda (nugget and sill variances) with  minima at the endpoints: 
+##   (GCV) Generalized Cross-Validation 
+##    minimum at  right endpoint  lambda  =  9.811065e-06 (eff. df= 121.6 )
+## Warning: 
+## Grid searches over lambda (nugget and sill variances) with  minima at the endpoints: 
+##   (GCV) Generalized Cross-Validation 
+##    minimum at  right endpoint  lambda  =  9.811065e-06 (eff. df= 121.6 )
 ```
 
 ```r
