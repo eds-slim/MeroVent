@@ -24,10 +24,6 @@ CKDEPI.c.subset <- c(80, 85, 90)
 LOGPRO.subset <- c(2.699, 3)
 LOGPRO.c.subset <- c(2.5, 2.7, 3)
 dose.c.subset <- c(3,4,5,6)
-
-dose.c.range <- seq(1.5, 18, .1)
-CKDEPI.c.range <- seq(10,160,1)
-LOGPRO.c.range <- seq(2, 5, .01)
 ```
 
 # Load and prepare data
@@ -43,8 +39,7 @@ dd <- read.table('./../sdtab020_1GB_clean_15', header = TRUE) %>%
   mutate(p = pmax(p, lag(p, n = 1, default = 0)))
 ```
 
-Six discrete doses represent 1.5, ..., 8g of daily Meropenem. LOGPRO measures protein concentrations in unclear units. TIME might not be relevant.
-
+Six discrete doses represent 1.5, ..., 8g of daily Meropenem. LOGPRO measures protein concentrations in log10 ([mg/l]).
 # Replication of figures from manuscript
 ```{r}
 dd %>% 
@@ -66,8 +61,9 @@ dd %>%
 ```{r}
 dd %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>% 
   filter(p>=PTA) %>% slice(which.min(dose)) %>% 
-  ggplot(aes(x = CKDEPI, y = LOGPRO, fill = as.factor(dose))) +
-  geom_tile()
+  ggplot(aes(x = CKDEPI, y = 10^LOGPRO, fill = as.factor(dose))) +
+  geom_tile() +
+  scale_y_continuous(trans = 'log10')
 ```
 
 
@@ -103,10 +99,11 @@ d.plot1 %>%
 ```{r}
 d.plot1 %>% 
   filter(dose.c %in% c(3,3.5,4)) %>% 
-  ggplot(aes(x = CKDEPI, y = LOGPRO, fill = p)) +
+  ggplot(aes(x = CKDEPI, y = 10^LOGPRO, fill = p)) +
   geom_tile() +
   facet_grid(~dose.c) +
-  scale_fill_gradient2(low = 'red', mid = 'yellow', high = 'darkgreen', midpoint = .5)
+  scale_fill_gradient2(low = 'red', mid = 'yellow', high = 'darkgreen', midpoint = .5) +
+  scale_y_continuous(trans = 'log10')
 
 ```
 
@@ -115,10 +112,32 @@ d.plot1 %>%
 ```{r}
 d.plot1 %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>% 
   filter(p>=PTA) %>% 
-  slice(which.min(dose.c)) %>% 
-  ggplot(aes(x = CKDEPI, y = LOGPRO, fill = dose.c)) +
+  slice(which.min(dose.c)) %>%
+  ungroup() %>% 
+  complete(CKDEPI, LOGPRO, fill = list(dose.c = NA)) %>% 
+  ggplot(aes(x = CKDEPI, y = 10^LOGPRO, fill = dose.c)) +
   geom_tile() +
-  scale_fill_gradient(low = 'pink', high = 'blue')
+  scale_fill_gradient(low = 'pink', high = 'blue') +
+  scale_y_continuous(trans = 'log10')
+
+d.plot1 %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>% 
+  filter(p>=PTA) %>% 
+  slice(which.min(dose.c)) %>%
+  ungroup() %>% 
+  complete(CKDEPI, LOGPRO, fill = list(dose.c = NA)) %>% 
+  ggplot(aes(x = CKDEPI, y = dose.c,)) +
+  geom_point(size=.5) + geom_line() +
+  facet_wrap(~LOGPRO)
+
+d.plot1 %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>% 
+  filter(p>=PTA) %>% 
+  slice(which.min(dose.c)) %>% 
+  ungroup() %>% 
+  complete(CKDEPI, LOGPRO, fill = list(dose.c = NA)) %>% 
+  ggplot(aes(x = 10^LOGPRO, y = dose.c,)) +
+  geom_point(size=.5) + geom_line() +
+  facet_wrap(~CKDEPI) +
+  scale_x_continuous(trans = 'log10')
 ```
 
 ### Upsampling
@@ -127,26 +146,40 @@ d.plot1 %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>%
 d.plot1.up <- d.plot1 %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>% 
   filter(p>=PTA) %>% 
   slice(which.min(dose.c)) %>% 
+  ungroup() %>% 
+  complete(CKDEPI, LOGPRO, fill = list(dose.c = NA)) %>% 
   ungroup() %>% nest() %>% 
   mutate(tps = map(data, ~fields::Tps(.[c('CKDEPI','LOGPRO')], .$dose.c))
          , tps.xy = map(tps, ~expand_grid(CKDEPI.c = CKDEPI.c.range, LOGPRO.c = LOGPRO.c.range))
-         , dose.c = map(tps, ~predict(., expand_grid(CKDEPI.c.range, LOGPRO.c.range), lambda = 0.05)[,1])) %>% 
+         , dose.c = map(tps, ~predict(., expand_grid(CKDEPI.c.range, LOGPRO.c.range), lambda = 0)[,1])) %>% 
   unnest(c(tps.xy, dose.c)) 
 ```
 
 ```{r}
+d.plot1.up %>% ungroup() %>%  group_by(CKDEPI.c, LOGPRO.c) %>% 
+  filter(CKDEPI.c < 21) %>% 
+  ggplot(aes(x = LOGPRO.c, y = dose.c,)) +
+  geom_point(size=.1) + geom_line() +
+  geom_point(data = dd %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>% filter(p>=PTA) %>% slice(which.min(dose)) %>% rename(CKDEPI.c = CKDEPI, LOGPRO.c = LOGPRO) %>% filter(CKDEPI.c < 21), aes(x=LOGPRO.c, y = dose), size=2) +
+  facet_wrap(~CKDEPI.c)
+```
+
+
+```{r}
 d.plot1.up %>% 
-  ggplot(aes(x = CKDEPI.c, y = LOGPRO.c, fill = dose.c)) +
+  ggplot(aes(x = CKDEPI.c, y = 10^LOGPRO.c, fill = dose.c)) +
   geom_tile() +
-  scale_fill_gradient(low = 'pink', high = 'blue')
+  scale_fill_gradient(low = 'pink', high = 'blue') +
+  scale_y_continuous(trans = 'log10')
 
 d.plot1.up %>% 
-  ggplot(aes(x = CKDEPI.c, y = LOGPRO.c, z = dose.c)) +
+  ggplot(aes(x = CKDEPI.c, y = 10^LOGPRO.c, z = dose.c)) +
   geom_contour(breaks = seq(1,18)) +
   metR::geom_text_contour(stroke = 0.2, breaks = seq(1,18), skip = 0) +
   geom_contour(size=.1, breaks = seq(1.1,1.9,.1), color = 'grey') +
   metR::geom_text_contour(stroke = 0.1, size = 2, breaks = seq(1.1,1.9, .1), skip = 0, color = 'black', label.placement = label_placement_fraction(frac = c(.1,.9))) +
-  theme_bw()
+  theme_bw() +
+  scale_y_continuous(trans = 'log10')
 ```
 
 ## Only CKD x LOGPRO
