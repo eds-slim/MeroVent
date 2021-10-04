@@ -23,7 +23,7 @@ require(patchwork)
 
 
 PTA <- 0.9
-MIC <- 8
+MIC <- 2
 
 CKDEPI.subset <- c(80, 90)
 CKDEPI.c.subset <- c(80, 85, 90)

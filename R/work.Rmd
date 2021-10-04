@@ -22,7 +22,7 @@ require(patchwork)
 
 
 PTA <- 0.9
-MIC <- 8
+MIC <- 2
 
 CKDEPI.subset <- c(80, 90)
 CKDEPI.c.subset <- c(80, 85, 90)
@@ -291,7 +291,7 @@ d.lines %>%
 ```
 
 
-```{r fig.height=5, fig.width=7}
+```{r fig.height=20, fig.width=30}
 (p.dosebanding + p.dosebanding.interp + p.contour + p.overlay + p.nomogram) + guide_area() + plot_layout(guides = 'collect')
 ggsave(paste0('./plots/nomograms_MIC_', MIC, '.png'), units = 'cm', width = 30, height = 20)
 ```
