@@ -23,7 +23,7 @@ require(patchwork)
 
 
 PTA <- 0.9
-MIC <- 8
+MIC <- 4
 
 CKDEPI.subset <- c(80, 90)
 CKDEPI.c.subset <- c(80, 85, 90)
@@ -52,8 +52,8 @@ dd <- d %>%
   mutate(p = cummax(p))
 
 dose.c.range <- do.call(seq, c(dd$dose %>% range() %>% as.list(), by=.1)) %>% union(dd$dose %>% unique) %>% sort()
-CKDEPI.c.range <- do.call(seq, c(dd$CKDEPI %>% range() %>% as.list(), by=2)) %>% union(dd$CKDEPI %>% unique) %>% sort()
-LOGPRO.c.range <- do.call(seq, c(dd$LOGPRO %>% range() %>% as.list(), by=.025)) %>% union(dd$LOGPRO %>% unique) %>% sort()
+CKDEPI.c.range <- do.call(seq, c(dd$CKDEPI %>% range() %>% as.list(), by=1)) %>% union(dd$CKDEPI %>% unique) %>% sort()
+LOGPRO.c.range <- do.call(seq, c(dd$LOGPRO %>% range() %>% as.list(), by=.01)) %>% union(dd$LOGPRO %>% unique) %>% sort()
 
 grid <- expand_grid(CKDEPI = CKDEPI.c.range %>% union(dd$CKDEPI %>% unique), LOGPRO = LOGPRO.c.range %>% union(dd$LOGPRO %>% unique))
 ```
@@ -112,18 +112,24 @@ p.dosebanding
 
 ```r
 temp <- dd %>% ungroup() %>% group_by(dose, CKDEPI) %>% 
-  mutate(dose.c = -cummax(-p)) %>% 
+  mutate(p = cummax(p)) %>% 
   ungroup() %>% group_by(dose, LOGPRO) %>% 
-  mutate(dose.c = cummax(p)) %>% 
-  ungroup() %>% group_by(dose) %>% nest() %>% 
+  mutate(p = -cummax(-p)) %>% 
+  ungroup() %>% group_by(dose) %>% 
+  nest() %>% 
+  mutate(mean.CKD = map_dbl(data, ~mean(.$CKDEPI))
+         , sd.CKD = map_dbl(data, ~sd(.$CKDEPI))
+         , mean.PRO = map_dbl(data, ~mean(.$LOGPRO))
+         , sd.PRO = map_dbl(data, ~sd(.$LOGPRO))) %>% 
   mutate(xy = list(grid),
     z = map(data, ~interp(x = .$CKDEPI, y = .$LOGPRO, z = .$p, xo = grid$CKDEPI %>% unique(), yo = grid$LOGPRO %>% unique(), linear = TRUE, extrap = FALSE)$z %>% t() %>% as.vector())
-    #, scam.out = map(data, ~scam(p ~ s(CKDEPI, LOGPRO, bs = 'tedmi', k = 11), data=mutate(., CKDEPI = 170 - CKDEPI), scale = 0))
-    #, z2 = map(scam.out, ~predict(., grid %>% mutate(CKDEPI = 170 - CKDEPI)))
+    #, scam.out = map(data, ~gam(p ~ s(CKDEPI, LOGPRO, bs = 'tp', k = 35), data = group_by(., p, LOGPRO) %>% filter(p!=1 | (p==1 & CKDEPI==max(CKDEPI))) %>% mutate(CKDEPI = 170 - CKDEPI, CKDEPI = (CKDEPI-mean.CKD)/sd.CKD, LOGPRO = (LOGPRO-mean.PRO)/sd.PRO), scale = 0))
+    #, z2 = map(scam.out, ~predict(., grid %>% mutate(CKDEPI = 170 - CKDEPI, CKDEPI = (CKDEPI-mean.CKD)/sd.CKD, LOGPRO = (LOGPRO-mean.PRO)/sd.PRO)))
     ) %>% 
   unnest(c(xy,z)) %>% 
   rename(p = z, CKDEPI.c = CKDEPI, LOGPRO.c = LOGPRO)
   
+
 temp %>% 
   filter(LOGPRO.c %in% LOGPRO.c.range[which(LOGPRO.c.range==3)+c(-1,0,1)]) %>% 
   ggplot(aes(x = CKDEPI.c, y = p)) +
@@ -191,11 +197,14 @@ d.plot1 %>%
   filter(CKDEPI %in% CKDEPI.subset & LOGPRO %in% LOGPRO.subset) %>% 
   ggplot(aes(x = dose.c, y = p)) +
   geom_line(aes(x=dose.c, y=p), color = 'black') +
-  geom_point(data = dd %>% filter(CKDEPI %in% CKDEPI.subset & LOGPRO %in% LOGPRO.subset), aes(x=dose), shape = 21, fill = 'orange') +
+  geom_point(data = dd %>% filter(CKDEPI %in% CKDEPI.subset & LOGPRO %in% LOGPRO.subset), aes(x=dose, , fill = if_else(p<PTA, 'orange', 'blue')), shape = 21) +
+  geom_hline(yintercept = PTA, size = .2) +
+  annotate(geom = 'text', label = paste0('PTA=', PTA), x = 0, y = PTA, vjust=-.5, hjust=0.1) +
   facet_grid(CKDEPI ~ LOGPRO, labeller = labeller(LOGPRO = function(x)paste0('CSF protein: ',round(10^as.numeric(x)), ' mg/l')
                                                   , CKDEPI = function(x)paste0('GFR: ', x, ' ml/min'))) +
   scale_x_continuous('Daily dose of meropenem [g]', breaks = dd$dose %>% unique()) +
   scale_y_continuous('Probability of target attainment (PTA)', breaks = seq(0,1,.25), labels = scales::percent, limits = c(0,1)) +
+  guides(fill = FALSE) +
   theme_bw() +
   theme(panel.grid.minor = element_blank())
 ```
