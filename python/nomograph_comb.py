@@ -16,7 +16,7 @@ N_params_GFR={
         'u_min':10.0,
         'u_max':160.0,
         'function':lambda u:-u,
-        'title':r'eGFR [ml/min/1.73$\rm{m}^2$]',
+        'title':r'eGFR [ml/min]',
         'tick_levels':3,
         'tick_text_levels':2,
         'tag':'r2'
@@ -26,32 +26,16 @@ N_params_LOGPRO={
         'u_min':10**2.4/1000,
         'u_max':10**4.4/1000,
         'function':lambda u:log10(1000*u),
-        'title':r'CSF protein [g/l]',
+        'title':r'Protein [mg/l]',
         'tick_levels':4,
-        'tick_text_levels':2,
+        'tick_text_levels':3,
         'tick_side':'left',
         'scale_type':'log smart',
-        'tag':'r1',
-        'extra_params': [{'scale_type': 'manual arrow',           # <-
-                              'manual_axis_data': {
-									#0.25: r'250mg',
-                                                   			#0.5: r'500mg',
-									#1: r'2g',
-                                                   			#5: r'5g',
-									#10: r'10g',
-                                                   			#15: r'15g',
-									#20: r'20g',
-                                                   			#25: r'25g'
-								1.3: r'1.3 g/l'
-								},
-                              'arrow_color': color.cmyk.Sepia,
-                              'arrow_length': 1.0,
-                              'text_color': color.cmyk.Sepia,
-                              }]
+        'tag':'r1'
                 }
 
 dict = {}
-fig, ax = plt.subplots(2,3)
+fig, ax = plt.subplots(3,3)
 i=0;
 for arg in sys.argv[1:len(sys.argv)]:
 
@@ -91,10 +75,16 @@ for arg in sys.argv[1:len(sys.argv)]:
 	dict[arg]['N_params_3']={
 	'tag':'scale'+arg,
         'u_min':1.5,
-        'u_max':17,
+        'u_max':17.5,
         'function_3':lambda u:dict[arg]['pol_m'](u),  #gam1.predict(u)[0],
         'function_4':lambda u:-dict[arg]['pol_b'](u), #gam2.predict(u)[0],
         'title':'',
+	'extra_titles':[{'dx':-5.7 if arg == '2' else -3,
+              'dy':-8 if arg == '2' else -2,
+              'text':r"MIC="+arg + "mg/l",
+              'width':5,
+              'pyx_extra_defs':[col, text.size(-1), trafo.rotate(40 if arg == '2' else 49)]
+              }],
         'tick_levels':4,
         'tick_text_levels':3,
 	'tick_side': 'right' if arg=='2' else 'left',
@@ -117,13 +107,7 @@ for arg in sys.argv[1:len(sys.argv)]:
         'text_distance_2': 1.0/4,
         'text_distance_3': 1.0/4,
         'text_distance_4': 1.0/4,
-	'title_distance_center': 1.5,
-	'extra_titles': [{'dx':-4.5,
-             			 'dy':-7.5,
-              			'text':r'Meropenem [mg/hr]',
-              			'width':5,
-              			'pyx_extra_defs':[text.size(1), trafo.rotate(50)]
-              			}],
+	'title_distance_center': 1.5 if arg == '2' else -1.5,
         'axis_color': col,
 	'title_color': col,
                 }
@@ -136,58 +120,7 @@ for arg in sys.argv[1:len(sys.argv)]:
              'f1_params':N_params_LOGPRO,
              'f2_params':N_params_GFR,
              'f3_params':dict[arg]['N_params_3'],
-	     'isopleth_values':[[10,60,'y'],[1,70,'x']],
-             }
-
-	col=color.cmyk.Turquoise if arg == '2' else color.cmyk.WildStrawberry
-	dict[arg]['N_params_3_alt']={
-	'tag':'scale'+arg,
-        'u_min':1.5*1000/24,
-        'u_max':17*1000/24,
-        'function_3':lambda u:dict[arg]['pol_m'](u/1000*24),  #gam1.predict(u)[0],
-        'function_4':lambda u:-dict[arg]['pol_b'](u/1000*24), #gam2.predict(u)[0],
-        'title':'',
-        'tick_levels':4,
-        'tick_text_levels':3,
-	'tick_side': 'left' if arg=='2' else 'right',
-        'scale_type':'linear smart',
-        'title_draw_center':True,
-	'title_opposite_tick': True,
-	'grid_length_0': 1/4,
-        'grid_length_1': 0.6/4,
-        'grid_length_2': 0.4/4,
-        'grid_length_3': 0.4/4,
-        'grid_length_4': 0.3/4,
-	'text_size_0': text.size.tiny,
-        'text_size_1': text.size.tiny,
-        'text_size_2': text.size.tiny,
-        'text_size_3': text.size.tiny,
-        'text_size_4': text.size.tiny,
-        'text_distance_0': 1.2/4,
-        'text_distance_1': 1.1/4,
-        'text_distance_2': 1.0/4,
-        'text_distance_3': 1.0/4,
-        'text_distance_4': 1.0/4,
-	'title_distance_center': 1.5,
-	'extra_titles': [{'dx':-6.5,
-             			 'dy':-5.5,
-              			'text':r'Meropenem [g/day]',
-              			'width':5,
-              			'pyx_extra_defs':[text.size(1), trafo.rotate(50)]
-              			}],
-        'axis_color': color.cmyk.Turquoise if arg == '2' else color.cmyk.WildStrawberry,
-	'title_color': color.cmyk.Turquoise if arg == '2' else color.cmyk.WildStrawberry,
-                }
-	
-
-	dict[arg]['block_1_params_alt']={
-             'block_type':'type_10',
-             'width':10.0,
-             'height':10.0,
-             'f1_params':N_params_LOGPRO,
-             'f2_params':N_params_GFR,
-             'f3_params':dict[arg]['N_params_3_alt'],
-	     'isopleth_values':[[10,60,'y'],[1,70,'x']],
+	     'isopleth_values':[[5,80,'y'],[1,140,'x']],
              }
 
 	i=i+1
@@ -213,9 +146,9 @@ main_params={
               'filename':'nomograph_MIC_' + ''.join(sys.argv[1:len(sys.argv)]) + '.pdf',
               'paper_height':10.0,
               'paper_width':10.0,
-              'block_params':[value['block_1_params'] for key, value in dict.items()]+[value['block_1_params_alt'] for key, value in dict.items()],
+              'block_params':[value['block_1_params'] for key, value in dict.items()],
               'transformations':[('rotate',0.01),('scale paper',)],
-              #'title_str':r'$y-m(z)x-b(z)=0$',
+              'title_str':r'Meropenem [g/day]',
 		'make_grid': False,
               }
 

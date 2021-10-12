@@ -23,7 +23,7 @@ require(patchwork)
 
 
 PTA <- 0.9
-MIC <- 2
+MIC <- 8
 
 CKDEPI.subset <- c(80, 90)
 CKDEPI.c.subset <- c(80, 85, 90)
@@ -117,7 +117,10 @@ temp <- dd %>% ungroup() %>% group_by(dose, CKDEPI) %>%
   mutate(dose.c = cummax(p)) %>% 
   ungroup() %>% group_by(dose) %>% nest() %>% 
   mutate(xy = list(grid),
-    z = map(data, ~interp(x = .$CKDEPI, y = .$LOGPRO, z = .$p, xo = grid$CKDEPI %>% unique(), yo = grid$LOGPRO %>% unique(), linear = TRUE, extrap = FALSE)$z %>% t() %>% as.vector())) %>% 
+    z = map(data, ~interp(x = .$CKDEPI, y = .$LOGPRO, z = .$p, xo = grid$CKDEPI %>% unique(), yo = grid$LOGPRO %>% unique(), linear = TRUE, extrap = FALSE)$z %>% t() %>% as.vector())
+    #, scam.out = map(data, ~scam(p ~ s(CKDEPI, LOGPRO, bs = 'tedmi', k = 11), data=mutate(., CKDEPI = 170 - CKDEPI), scale = 0))
+    #, z2 = map(scam.out, ~predict(., grid %>% mutate(CKDEPI = 170 - CKDEPI)))
+    ) %>% 
   unnest(c(xy,z)) %>% 
   rename(p = z, CKDEPI.c = CKDEPI, LOGPRO.c = LOGPRO)
   
@@ -129,7 +132,7 @@ temp %>%
   facet_grid(dose ~ LOGPRO.c, labeller = labeller(LOGPRO.c = function(x)paste0('CSF protein: ',round(10^as.numeric(x)), ' mg/l')
                                                   , dose = function(x)paste0('Meronem:\n', x, ' g/day'))) +
   scale_x_continuous('GFR [ml/min]') +
-  scale_y_continuous('Probability of target attainment (PTA)', breaks = seq(0,1,.25), labels = scales::percent, limits = c(0,1)) +
+  scale_y_continuous('Probability of target attainment (PTA)', breaks = seq(0,1,.25), labels = scales::percent, limits = c(0,1.1)) +
   theme_bw()
 ```
 
@@ -144,7 +147,7 @@ temp %>%
   facet_grid(dose ~ CKDEPI.c, labeller = labeller(CKDEPI.c = function(x)paste0('GFR: ',x, ' ml/min')
                                                   , dose = function(x)paste0('Meronem:\n', x, ' g/day'))) +
   scale_x_continuous('Protein [g/l]') +
-  scale_y_continuous('Probability of target attainment (PTA)', breaks = seq(0,1,.25), labels = scales::percent, limits = c(0,1)) +
+  scale_y_continuous('Probability of target attainment (PTA)', breaks = seq(0,1,.25), labels = scales::percent, limits = c(0,1.1)) +
   theme_bw()
 ```
 
@@ -208,13 +211,20 @@ temp <- d.plot1 %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>%
   filter(p>=PTA) %>% 
   slice(which.min(dose.c)) %>% 
   ungroup() %>% 
-  complete(CKDEPI, LOGPRO, fill = list(dose.c = 18.01)) %>% 
+  complete(CKDEPI, LOGPRO, fill = list(dose.c = NA)) %>% 
   group_by(CKDEPI) %>% 
-  mutate(dose.c = -cummax(-dose.c)) %>% 
+  mutate(dose.c = -na.tools::na.cummax(-dose.c, na.rm = TRUE)) %>% 
   ungroup() %>% group_by(LOGPRO) %>% 
-  mutate(dose.c = cummax(dose.c))
+  mutate(dose.c = na.tools::na.cummax(dose.c, na.rm = TRUE)) %>% 
+  ungroup()
 
-z <- interp(x = temp$CKDEPI, y = temp$LOGPRO, z = temp$dose.c, xo = grid$CKDEPI %>% unique(), yo = grid$LOGPRO %>% unique(), linear = TRUE, extrap = FALSE)$z %>% t() %>% as.vector()
+#z <- interp(x = temp$CKDEPI, y = temp$LOGPRO, z = temp$dose.c, xo = grid$CKDEPI %>% unique(), yo = grid$LOGPRO %>% unique(), linear = TRUE, extrap = FALSE)$z %>% t() %>% as.vector()
+
+require(scam)
+scam.out <- scam(dose.c ~ s(CKDEPI, LOGPRO, bs = 'tedmi'), data=temp %>% group_by(dose.c, LOGPRO) %>% filter(dose.c!=1.5 | (dose.c==1.5 & CKDEPI==max(CKDEPI))) %>% mutate(LOGPRO = 4.4 - LOGPRO))
+z <- predict(scam.out, grid %>% mutate(LOGPRO = 4.4 - LOGPRO))
+#z[z>18]<-18
+#z[z<1.5]<-1.5
 
 grid %>% bind_cols(data.frame(dose.c = z %>% t() %>% as.vector())) %>%
   rename(CKDEPI.c = CKDEPI, LOGPRO.c = LOGPRO) %>% 
@@ -222,7 +232,7 @@ grid %>% bind_cols(data.frame(dose.c = z %>% t() %>% as.vector())) %>%
   ggplot(aes(x = LOGPRO.c, y = dose.c)) +
   geom_point(size=.1) + geom_line() +
   geom_point(data = dd %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>% filter(p>=PTA) %>% slice(which.min(dose)) %>% rename(CKDEPI.c = CKDEPI, LOGPRO.c = LOGPRO) %>% filter(CKDEPI.c%%5==0), aes(x=LOGPRO.c, y = dose), size=2, shape=21) +
-  geom_point(data = temp %>% rename(LOGPRO.c = LOGPRO, CKDEPI.c = CKDEPI), fill='orange', shape = 21) +
+  geom_point(data = temp  %>% rename(LOGPRO.c = LOGPRO, CKDEPI.c = CKDEPI), fill='orange', shape = 21) +
   facet_wrap(~ CKDEPI.c, labeller = labeller(CKDEPI.c = function(x)paste0('GFR: ', x, ' ml/min'))) +
   scale_x_continuous('Protein [g/l]', breaks = dd$LOGPRO %>% unique(), labels = 10*round((10^dd$LOGPRO %>% unique())/10)) +
   scale_y_continuous('Daily dose of meropenem [g]', breaks = dd$dose %>% unique()) +
@@ -235,13 +245,14 @@ grid %>% bind_cols(data.frame(dose.c = z %>% t() %>% as.vector())) %>%
 ![](work_files/figure-html/unnamed-chunk-6-1.png)<!-- -->
 
 ```r
+LOGPRO.sample<-3
 grid %>% bind_cols(data.frame(dose.c = z %>% t() %>% as.vector())) %>%
   rename(CKDEPI.c = CKDEPI, LOGPRO.c = LOGPRO) %>% 
-  filter(LOGPRO.c %in% LOGPRO.c.range[which(LOGPRO.c.range==3)+c(-1,0,1)]) %>% 
+  filter(LOGPRO.c %in% LOGPRO.c.range[which(LOGPRO.c.range==LOGPRO.sample)+c(-1,0,1)]) %>% 
   ggplot(aes(x = CKDEPI.c, y = dose.c,)) +
   geom_point(size=.1) + geom_line() +
-  geom_point(data = dd %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>% filter(p>=PTA) %>% slice(which.min(dose)) %>% rename(CKDEPI.c = CKDEPI, LOGPRO.c = LOGPRO) %>% filter(LOGPRO.c %in% LOGPRO.c.range[which(LOGPRO.c.range==3)+c(-1,0,1)]), aes(x = CKDEPI.c, y = dose), size=2) +
-  geom_point(data = temp %>% rename(LOGPRO.c = LOGPRO, CKDEPI.c = CKDEPI) %>% filter(LOGPRO.c %in% LOGPRO.c.range[which(LOGPRO.c.range==3)+c(-1,0,1)]), fill='orange', shape = 21) +
+  geom_point(data = dd %>% ungroup() %>%  group_by(CKDEPI, LOGPRO) %>% filter(p>=PTA) %>% slice(which.min(dose)) %>% rename(CKDEPI.c = CKDEPI, LOGPRO.c = LOGPRO) %>% filter(LOGPRO.c %in% LOGPRO.c.range[which(LOGPRO.c.range==LOGPRO.sample)+c(-1,0,1)]), aes(x = CKDEPI.c, y = dose), size=2) +
+  geom_point(data = temp %>% rename(LOGPRO.c = LOGPRO, CKDEPI.c = CKDEPI) %>% filter(LOGPRO.c %in% (LOGPRO.c.range[which(LOGPRO.c.range==LOGPRO.sample)+c(-1,0,1)])) , fill='orange', shape = 21) +
   facet_wrap(~ LOGPRO.c, labeller = labeller(LOGPRO.c = function(x)paste0('CSF protein: ',round(10^as.numeric(x)), ' mg/l'))) +
   scale_x_continuous('GFR [mg/ml]') +
   scale_y_continuous('Daily dose of meropenem [g]', breaks = dd$dose %>% unique()) +
@@ -253,7 +264,7 @@ grid %>% bind_cols(data.frame(dose.c = z %>% t() %>% as.vector())) %>%
 
 
 ```r
-c1 <- setdiff(c(dd$dose %>% unique, 1.50001),c(1.5)) %>% sort()
+c1 <- setdiff(c(dd$dose %>% unique, 1.5),c(1)) %>% sort()
 c2 <- setdiff(seq(2, dd$dose %>% max(), by = 1), union(c(1.5, 18), c1))
 c3 <- setdiff(seq(2, dd$dose %>% max(), by = .5), union(c(1.5, 18), union(c1, c2)))
 
