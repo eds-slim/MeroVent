@@ -282,7 +282,7 @@ d.lines <- grid %>%
   rename(dose.c = z, CKDEPI.c = CKDEPI, LOGPRO.c = LOGPRO) %>% 
   filter(abs(dose.c - round(2*dose.c)/2)<0.1) %>%
   mutate(dose.c = round(2*dose.c)/2) %>% 
-  filter(dose.c >= 2 & dose.c < 18) %>% 
+  filter(dose.c >= 1.5 & dose.c <= 18) %>% 
   arrange(dose.c) %>% group_by(dose.c) %>% nest() %>% 
   mutate(mdl = map(data, ~lm(LOGPRO.c ~ CKDEPI.c, data = .))
          , tidy = map(mdl, broom::tidy)
