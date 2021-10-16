@@ -63,10 +63,10 @@ N_params_LOGPRO={
 	'text_format':r"$%3.0f$ ",
 	'text_format_func': lambda s: f"{s:,}",
         'extra_params': [{
-				'u_min': 10001.0/multiplier, 
-                              	'u_max': 10**4.4/multiplier,  
-                              	'tick_text_levels': 3,  
-                              	}],
+		'u_min': 10001.0/multiplier, 
+                'u_max': 10**4.4/multiplier,  
+                'tick_text_levels': 3,  
+                }],
 	}
 
 N_params_LOGPRO_alt={
@@ -112,11 +112,11 @@ N_params_3={
         #'text_distance_3': 0.6/4,
         #'text_distance_4': 1.0/4,
 	'extra_titles': [{'dx':-6,
-             			 'dy':-12,
-              			'text':r'g/d',
-              			'width':5,
-              			'pyx_extra_defs':[text.size(-3), trafo.rotate(0)]
-              			}],
+		'dy':-12,
+              	'text':r'g/d',
+              	'width':5,
+              	'pyx_extra_defs':[text.size(-3), trafo.rotate(0)]
+              	}],
         'axis_color': col,
 	}
 	
@@ -159,11 +159,11 @@ N_params_3_alt={
         #'text_distance_3': 0.2,
         #'text_distance_4': 1.0/4,
 	'extra_titles': [{'dx':-5,
-             			 'dy':-12,
-              			'text':r'mg/hr',
-              			'width':5,
-              			'pyx_extra_defs':[text.size(-3), trafo.rotate(0)]
-              			}],
+		'dy':-12,
+              	'text':r'mg/hr',
+              	'width':5,
+              	'pyx_extra_defs':[text.size(-3), trafo.rotate(0)]
+              	}],
         'axis_color': col,
 	}
 	
